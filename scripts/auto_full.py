@@ -152,29 +152,6 @@ def interactive_input(args) -> None:
         v = input("AT-rich モードを使用しますか？ (Lepidoptera 等の mtDNA) [y/N]: ").strip().lower()
         args.at_rich = v in ("y", "yes")
 
-    # 設計モードの対話選択 (CLI で指定済みならスキップ)
-    if args.mode is None:
-        print()
-        print("プライマー設計モード:")
-        print("  1) GCA モード     — 100-160 bp (分解 DNA / 消化管内容物 DNA 解析)")
-        print("  2) 汎用モード     — 200-1000 bp (通常の特異的 PCR、クローニング等)")
-        v = input("番号を選んでください [1/2] (default: 1): ").strip()
-        if v == "2":
-            args.mode = "general"
-            # 産物サイズ範囲の入力
-            pmin_str = input("  最小産物サイズ bp [default: 200]: ").strip()
-            pmax_str = input("  最大産物サイズ bp [default: 1000]: ").strip()
-            try:
-                args.product_size_min = int(pmin_str) if pmin_str else 200
-            except ValueError:
-                args.product_size_min = 200
-            try:
-                args.product_size_max = int(pmax_str) if pmax_str else 1000
-            except ValueError:
-                args.product_size_max = 1000
-        else:
-            args.mode = "gca"
-
     print()
     print("【入力確認】")
     print(f"  標的種       : {args.target}")
@@ -182,12 +159,6 @@ def interactive_input(args) -> None:
     print(f"  近縁種       : {args.related or '(なし)'}")
     print(f"  非標的生物   : {args.nontarget or '(なし)'}")
     print(f"  AT-rich      : {'ON' if args.at_rich else 'OFF (失敗時は自動フォールバック)'}")
-    if args.mode == "general":
-        pmin = args.product_size_min or 200
-        pmax = args.product_size_max or 1000
-        print(f"  設計モード   : 汎用 ({pmin}-{pmax} bp)")
-    else:
-        print(f"  設計モード   : GCA (100-160 bp)")
     print()
     input("Enter で開始 (Ctrl+C で中止)...")
     print()
@@ -208,14 +179,6 @@ def main():
                    help="非標的生物 (カンマ区切り、空欄可)")
     p.add_argument("--at-rich", action="store_true",
                    help="AT-rich モード (Lepidoptera 等の mtDNA 向け)")
-    p.add_argument("--mode", choices=["gca", "general"], default=None,
-                   help=("プライマー設計モード。"
-                         "gca: 100-160bp (GCA 用、デフォルト)、"
-                         "general: 汎用特異的プライマー (200-1000bp)"))
-    p.add_argument("--product-size-min", type=int, default=None,
-                   help="general モード時の最小産物サイズ bp (default: 200)")
-    p.add_argument("--product-size-max", type=int, default=None,
-                   help="general モード時の最大産物サイズ bp (default: 1000)")
     p.add_argument("--max-seqs", type=int, default=10,
                    help="種ごとの最大取得配列数 (default: 10)")
     p.add_argument("--skip-design", action="store_true",
@@ -233,10 +196,6 @@ def main():
     # --target または --gene が未指定なら対話モード
     if not args.non_interactive and (not args.target or not args.gene):
         interactive_input(args)
-
-    # non-interactive 時の mode デフォルト
-    if args.mode is None:
-        args.mode = "gca"
 
     project_name = project_folder_name(args.target, args.gene)
     project_dir = (REPORTS_DIR / project_name).resolve()
@@ -257,12 +216,6 @@ def main():
     print(f"  Related      : {args.related or '(なし)'}")
     print(f"  Nontarget    : {args.nontarget or '(なし)'}")
     print(f"  AT-rich      : {'ON' if args.at_rich else 'OFF'}")
-    if args.mode == "general":
-        _pmin = args.product_size_min or 200
-        _pmax = args.product_size_max or 1000
-        print(f"  Mode         : general ({_pmin}-{_pmax} bp)")
-    else:
-        print(f"  Mode         : gca (100-160 bp)")
     print(f"  Project dir  : {project_dir}")
     print(f"  Skip design  : {'YES' if args.skip_design else 'NO'}")
     print(f"  Automation   : {'OFF' if args.no_automation else 'ON (DNA Dynamo)'}")
@@ -292,12 +245,7 @@ def main():
             sys.executable, str(SCRIPTS_DIR / "design_primers_primer3.py"),
             "--input-dir", str(project_dir / "sequences"),
             "--output-dir", str(project_dir / "primer_candidates"),
-            "--mode", args.mode,
         ]
-        if args.product_size_min is not None:
-            design_cmd += ["--product-size-min", str(args.product_size_min)]
-        if args.product_size_max is not None:
-            design_cmd += ["--product-size-max", str(args.product_size_max)]
         used_at_rich = run_design_with_retry(2, design_cmd, at_rich=args.at_rich)
         if used_at_rich and not args.at_rich:
             print(f"  ℹ 自動 fallback: --at-rich モードで設計が成功しました")

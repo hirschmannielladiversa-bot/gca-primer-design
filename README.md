@@ -11,9 +11,6 @@ Built for researchers designing primers for **GCA (Gut Content Analysis)** — a
 ## Features
 
 - **One-command interactive workflow** — run `./auto_full.sh`, answer 5 prompts, done
-- **Two design modes**
-  - **GCA mode (default)**: 100–160 bp products for degraded DNA / gut-content analysis
-  - **General mode**: 200–1000 bp products for general specific PCR, cloning, sequencing
 - **AT-rich auto-fallback** — automatic `--at-rich` retry when Primer3 fails (for Lepidoptera / Diptera mtDNA)
 - **4-category visualization** — target / non-target / all sequences / excluded species, each as a separate DNA Dynamo `.cow` file
 - **Full macOS DNA Dynamo automation** — Quartz API-based automation of the Drag Drop Assembly Window (optional)
@@ -83,20 +80,11 @@ For detailed usage, AT-rich explanation, troubleshooting, and a Q&A section, ope
 ### Non-interactive (CLI arguments)
 
 ```bash
-# GCA mode (default, 100–160 bp)
 ./auto_full.sh "Helicoverpa armigera" COI
 ./auto_full.sh "Helicoverpa armigera" COI --at-rich
-
-# General mode (200–1000 bp, for standard specific PCR)
-./auto_full.sh "Helicoverpa armigera" COI --mode general
-./auto_full.sh "Helicoverpa armigera" COI --mode general --product-size-min 300 --product-size-max 700
-
-# Related / non-target species
 ./auto_full.sh "Bemisia tabaci" COI --related "Trialeurodes vaporariorum"
-
-# Already designed or file-only
-./auto_full.sh "Helicoverpa armigera" COI --skip-design   # Skip design, visualize only
-./auto_full.sh "Helicoverpa armigera" COI --no-automation # Generate files, skip DNA Dynamo
+./auto_full.sh "Helicoverpa armigera" COI --skip-design   # Already designed
+./auto_full.sh "Helicoverpa armigera" COI --no-automation # Skip DNA Dynamo
 ```
 
 ### Verify generated files
