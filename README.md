@@ -1,83 +1,148 @@
 # GCA Primer Auto Design
 
-**種名を入れるだけで、NCBI 配列取得 → Primer3 設計 → クロスチェック → DNA Dynamo 可視化までを完全自動化する macOS 向けツールキット**
+**A macOS toolkit that fully automates the workflow from species name input → NCBI sequence fetch → Primer3 design → DNA Dynamo visualization in a single command.**
 
-GCA (Gut Content Analysis: 消化管内容物 DNA 解析) 用のプライマーを設計する研究者のために作られました。
+Built for researchers designing primers for **GCA (Gut Content Analysis)** — amplifying the target species DNA while avoiding non-target and related species.
 
----
-
-## 特徴
-
-- **ワンコマンド** — `./auto_full.sh` で対話モードが起動し、種名・遺伝子名を入力するだけ
-- **AT-rich 自動対応** — 鱗翅目・双翅目の AT-rich mtDNA でも Primer3 失敗時に `--at-rich` で自動再試行
-- **4 カテゴリ可視化** — ターゲット / 非標的 / 全配列 / 除外種 を別々の DNA Dynamo `.cow` ファイルに自動アラインメント
-- **macOS 完全自動操作** — Quartz API 経由で DNA Dynamo の Drag Drop Assembly Window を自動操作 (オプション)
-- **クロス汚染防止** — 各種が `reports/<Species>_<Gene>/` の独立フォルダに収まる
+> 日本語版: [README.ja.md](README.ja.md)
 
 ---
 
-## クイックスタート
+## Features
+
+- **One-command interactive workflow** — run `./auto_full.sh`, answer 5 prompts, done
+- **AT-rich auto-fallback** — automatic `--at-rich` retry when Primer3 fails (for Lepidoptera / Diptera mtDNA)
+- **4-category visualization** — target / non-target / all sequences / excluded species, each as a separate DNA Dynamo `.cow` file
+- **Full macOS DNA Dynamo automation** — Quartz API-based automation of the Drag Drop Assembly Window (optional)
+- **Per-species isolation** — each species lands in its own `reports/<Species>_<Gene>/` folder
+
+---
+
+## Quick Start
 
 ```bash
-git clone https://github.com/TKG-M/gca-primer-design.git
+git clone https://github.com/hirschmannielladiversa-bot/gca-primer-design.git
 cd gca-primer-design
 
-# 依存パッケージ
+# Dependencies
 pip3 install -r requirements.txt
 
-# (可視化を使う場合のみ)
+# Optional (for DNA Dynamo automation)
 pip3 install pyobjc-framework-Quartz
 
-# 実行権限
+# Make scripts executable
 chmod +x auto_full.sh auto_visualize.sh verify_slw_count.sh
 
-# 一発実行
+# Run
 ./auto_full.sh
 ```
 
-対話入力:
+Interactive prompts:
 
 ```
-標的種を入力してください (例: Helicoverpa armigera): Helicoverpa armigera
-対象遺伝子を入力してください (例: COI, matK): COI
-近縁種をカンマ区切りで入力 [空欄可]: Helicoverpa assulta,Spodoptera exigua
-非標的生物をカンマ区切りで入力 [空欄可]: Spodoptera litura
-AT-rich モードを使用しますか？ [y/N]: y
+Enter target species (e.g. Helicoverpa armigera): Helicoverpa armigera
+Enter target gene (e.g. COI, matK): COI
+Related species (comma-separated) [optional]: Helicoverpa assulta,Spodoptera exigua
+Non-target organisms (comma-separated) [optional]: Spodoptera litura
+Use AT-rich mode? (Lepidoptera etc. mtDNA) [y/N]: y
 ```
 
-完了後:
+Output:
 
 ```
 reports/Helicoverpa_armigera_COI/プライマー結合/
-├── ターゲット配列のみ.cow
-├── 非標的配列のみ.cow
-├── すべての配列.cow
-└── 除外した種_Spodoptera_litura.cow
+├── ターゲット配列のみ.cow      (Target sequences only)
+├── 非標的配列のみ.cow          (Non-target sequences only)
+├── すべての配列.cow            (All sequences)
+└── 除外した種_Spodoptera_litura.cow  (Excluded species)
+```
+
+> **Note**: Output filenames are intentionally in Japanese for direct display in DNA Dynamo window titles. Category labels above are English translations.
+
+---
+
+## Documentation
+
+For detailed usage, AT-rich explanation, troubleshooting, and a Q&A section, open **[manual.html](manual.html)** in your browser.
+
+日本語マニュアルは [manual.ja.html](manual.ja.html) を参照してください。
+
+---
+
+## Command-line Usage
+
+### Fully interactive
+
+```bash
+./auto_full.sh
+```
+
+### Non-interactive (CLI arguments)
+
+```bash
+./auto_full.sh "Helicoverpa armigera" COI
+./auto_full.sh "Helicoverpa armigera" COI --at-rich
+./auto_full.sh "Bemisia tabaci" COI --related "Trialeurodes vaporariorum"
+./auto_full.sh "Helicoverpa armigera" COI --skip-design   # Already designed
+./auto_full.sh "Helicoverpa armigera" COI --no-automation # Skip DNA Dynamo
+```
+
+### Verify generated files
+
+```bash
+./verify_slw_count.sh Helicoverpa_armigera_COI
 ```
 
 ---
 
-## ドキュメント
+## Requirements
 
-詳細な使い方・トラブルシューティング・Q&A は **[manual.html](manual.html)** をブラウザで開いてください。
-
----
-
-## 動作環境
-
-- **macOS** 10.15 以降 (DNA Dynamo 自動操作は macOS 専用)
-- **Python** 3.10 以降
-- **DNA Dynamo** (可視化部分のみ。ファイル生成だけなら不要)
-
-Linux / Windows でも配列取得・設計・cow ファイル生成までは動きますが、cow を DNA Dynamo で表示する自動操作部分は使えません (`--no-automation` を付けて実行してください)。
+- **macOS** 10.15+ (DNA Dynamo automation is macOS-only; file generation runs on Linux/Windows)
+- **Python** 3.10+
+- **DNA Dynamo** (only needed for the visualization/automation step)
 
 ---
 
-## ライセンス
+## How "recommended primer" is chosen
 
-MIT License — 詳細は [LICENSE](LICENSE) を参照。
+The top row of `primer_candidates.csv` sorted by `Quality_Score` descending. Primer3 + crosscheck score combined. Use `--top-n 3` to process multiple top candidates.
 
-外部ライブラリ:
+---
+
+## AT-rich Mode
+
+Many insect mitochondrial DNA (especially Lepidoptera, Diptera, Hymenoptera) is highly AT-rich (>70%), making Primer3 default parameters unable to find candidates. The `--at-rich` flag relaxes:
+
+| Parameter | Default | --at-rich |
+|---|---|---|
+| `PRIMER_MIN_TM` | 57°C | **50°C** |
+| `PRIMER_MAX_TM` | 63°C | **60°C** |
+| `PRIMER_MIN_GC` | 40% | **20%** |
+
+**You don't have to decide upfront**: if Primer3 returns no candidates with default settings, `auto_full.py` automatically retries with `--at-rich`.
+
+---
+
+## Security
+
+This tool was audited by two parallel security review agents (code-injection perspective + path-traversal / data-exfiltration perspective) before initial release. Fixes applied:
+
+- **CRITICAL ×1**: Python heredoc injection in `verify_slw_count.sh` — fixed
+- **HIGH ×5**: absolute path leakage, PATH hijack vector, zip-slip / zip-bomb defense, path traversal — all fixed
+- **MEDIUM ×6**: input sanitization in species / gene / project names — all fixed
+
+Subprocess calls use list-form `shell=False`, AppleScript arguments are passed via `argv` (not string interpolation), and all file paths are validated via `Path.resolve() + relative_to()` to stay within `reports/`.
+
+See [manual.html](manual.html) for details.
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE).
+
+External libraries:
+
 - [Biopython](https://biopython.org/) — Biopython License
 - [primer3-py](https://github.com/libnano/primer3-py) — GPL v2
 - [javaobj-py3](https://github.com/tcalmant/python-javaobj) — Apache 2.0
@@ -85,8 +150,8 @@ MIT License — 詳細は [LICENSE](LICENSE) を参照。
 
 ---
 
-## 著者
+## Author
 
 **TKG.M**
 
-バグ報告・機能要望は GitHub Issues にお願いします。
+Bug reports and feature requests welcome via GitHub Issues.
