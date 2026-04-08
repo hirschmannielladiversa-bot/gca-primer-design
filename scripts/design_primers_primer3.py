@@ -76,17 +76,113 @@ def calculate_gc(seq):
     return (gc / len(seq)) * 100
 
 
-def design_primers_with_primer3(sequence, seq_id="target", at_rich=False):
+def _build_size_ranges(min_size: int, max_size: int) -> list:
+    """指定された min-max から Primer3 用の 3 分割サイズ範囲リストを生成。
+
+    例: (200, 1000) → [[200, 467], [467, 733], [733, 1000]]
+    Primer3 は複数の範囲を順に試すので、3 分割することで全域をカバーする。
+    """
+    if max_size <= min_size:
+        return [[min_size, min_size + 1]]
+    span = max_size - min_size
+    one_third = span // 3
+    r1 = [min_size, min_size + one_third]
+    r2 = [min_size + one_third, min_size + 2 * one_third]
+    r3 = [min_size + 2 * one_third, max_size]
+    return [r1, r2, r3]
+
+
+def design_primers_with_primer3(sequence, seq_id="target", at_rich=False,
+                                 mode: str = "gca",
+                                 product_size_min: int | None = None,
+                                 product_size_max: int | None = None):
     """
     Primer3を使用してプライマーを設計
-    GCA用に最適化されたパラメータを使用
 
     Parameters:
         sequence: テンプレート配列
         seq_id: 配列ID
         at_rich: AT-rich配列用パラメータを使用（Lepidoptera等のミトコンドリアDNA向け）
+        mode: "gca" (デフォルト, 100-160bp の短い産物) or
+              "general" (汎用特異的プライマー, product_size_min/max で指定)
+        product_size_min: general モード時の最小産物サイズ (bp)。省略時は 200
+        product_size_max: general モード時の最大産物サイズ (bp)。省略時は 1000
     """
-    if at_rich:
+    if mode == "general":
+        # 汎用特異的プライマー用パラメータ
+        # 産物サイズ: ユーザー指定 (デフォルト 200-1000bp)
+        # 用途: qPCR 以外の通常の特異的 PCR、クローニング、シーケンシング等
+        pmin = product_size_min if product_size_min is not None else 200
+        pmax = product_size_max if product_size_max is not None else 1000
+        if pmin < 50:
+            pmin = 50
+        if pmax > 10000:
+            pmax = 10000
+        if pmax <= pmin:
+            pmax = pmin + 100
+
+        base_params = {
+            'SEQUENCE_ID': seq_id,
+            'SEQUENCE_TEMPLATE': sequence,
+            'PRIMER_TASK': 'generic',
+            'PRIMER_PICK_LEFT_PRIMER': 1,
+            'PRIMER_PICK_RIGHT_PRIMER': 1,
+            'PRIMER_PICK_INTERNAL_OLIGO': 0,
+
+            # 産物サイズ: ユーザー指定範囲を 3 分割して全域をカバー
+            'PRIMER_PRODUCT_SIZE_RANGE': _build_size_ranges(pmin, pmax),
+
+            # プライマー長: 汎用標準
+            'PRIMER_MIN_SIZE': 18,
+            'PRIMER_OPT_SIZE': 22,
+            'PRIMER_MAX_SIZE': 27,
+
+            # 二次構造
+            'PRIMER_MAX_SELF_ANY': 6,
+            'PRIMER_MAX_SELF_END': 3,
+            'PRIMER_MAX_POLY_X': 4,
+
+            # ペア条件
+            'PRIMER_PAIR_MAX_DIFF_TM': 2.0,
+
+            # 候補数
+            'PRIMER_NUM_RETURN': 10,
+
+            # 塩濃度
+            'PRIMER_SALT_MONOVALENT': 50.0,
+            'PRIMER_DNA_CONC': 250.0,
+            'PRIMER_TM_FORMULA': 1,  # SantaLucia法
+        }
+
+        if at_rich:
+            # 汎用 × AT-rich: Tm/GC を緩和
+            base_params.update({
+                'PRIMER_MIN_TM': 52.0,
+                'PRIMER_OPT_TM': 57.0,
+                'PRIMER_MAX_TM': 62.0,
+                'PRIMER_MIN_GC': 25.0,
+                'PRIMER_OPT_GC_PERCENT': 40.0,
+                'PRIMER_MAX_GC': 60.0,
+                'PRIMER_GC_CLAMP': 0,
+                'PRIMER_MAX_SELF_ANY': 8,
+                'PRIMER_MAX_SELF_END': 4,
+                'PRIMER_MAX_POLY_X': 5,
+                'PRIMER_PAIR_MAX_DIFF_TM': 3.0,
+            })
+        else:
+            # 汎用 × 通常: Tm/GC 標準
+            base_params.update({
+                'PRIMER_MIN_TM': 58.0,
+                'PRIMER_OPT_TM': 60.0,
+                'PRIMER_MAX_TM': 62.0,
+                'PRIMER_MIN_GC': 40.0,
+                'PRIMER_OPT_GC_PERCENT': 50.0,
+                'PRIMER_MAX_GC': 60.0,
+                'PRIMER_GC_CLAMP': 1,
+            })
+        primer3_params = base_params
+
+    elif at_rich:
         # AT-rich配列用パラメータ（Lepidoptera, Diptera等のミトコンドリアDNA）
         # 参考: LepF1/LepR1プライマー条件、PMC7379581
         primer3_params = {
@@ -300,8 +396,15 @@ def parse_primer3_results(results, at_rich=False):
     return primers
 
 
-def evaluate_primer(primer):
-    """プライマーの品質評価"""
+def evaluate_primer(primer, mode: str = "gca",
+                    product_size_min: int | None = None,
+                    product_size_max: int | None = None):
+    """プライマーの品質評価
+
+    mode="gca": 産物サイズ 100-120 が最適 (短いほど分解 DNA に強い)
+    mode="general": 指定範囲 (product_size_min〜product_size_max) 内なら満点、
+                    範囲外のものは減点
+    """
     score = 100
 
     # Tmチェック（58-62が理想）
@@ -321,11 +424,22 @@ def evaluate_primer(primer):
         if gc < 45 or gc > 55:
             score -= 5
 
-    # 産物サイズ（100-120が最適）
-    if primer['product_size'] > 140:
-        score -= 5
-    if primer['product_size'] > 160:
-        score -= 10
+    # 産物サイズ評価 (モード依存)
+    psize = primer['product_size']
+    if mode == "general":
+        pmin = product_size_min if product_size_min is not None else 200
+        pmax = product_size_max if product_size_max is not None else 1000
+        if psize < pmin:
+            score -= 10
+        elif psize > pmax:
+            score -= 10
+        # 範囲内なら減点なし
+    else:
+        # gca モード: 100-120 が最適、140 超で減点
+        if psize > 140:
+            score -= 5
+        if psize > 160:
+            score -= 10
 
     # 3'末端チェック
     for seq in [primer['left_seq'], primer['right_seq']]:
@@ -438,13 +552,22 @@ def main():
     global SEQUENCES_DIR, OUTPUT_DIR
 
     # コマンドライン引数パーサー
-    parser = argparse.ArgumentParser(description="Primer3 GCA用プライマー設計")
+    parser = argparse.ArgumentParser(
+        description="Primer3 プライマー設計 (GCA モード / 汎用モード)")
     parser.add_argument("--input-dir", type=str, default=None,
                        help="配列ファイルのディレクトリ")
     parser.add_argument("--output-dir", type=str, default=None,
                        help="出力ディレクトリ")
     parser.add_argument("--at-rich", action="store_true",
-                       help="AT-rich配列用パラメータを使用（Lepidoptera等のミトコンドリアDNA向け）")
+                       help="AT-rich配列用パラメータ (Lepidoptera等の mtDNA 向け)")
+    parser.add_argument("--mode", choices=["gca", "general"], default="gca",
+                       help=("プライマー設計モード。"
+                             "gca: 100-160bp の短い産物 (分解 DNA 対応、デフォルト)、"
+                             "general: 汎用特異的プライマー (200-1000bp 推奨、--product-size-min/max で指定)"))
+    parser.add_argument("--product-size-min", type=int, default=None,
+                       help="general モード時の最小産物サイズ bp (デフォルト: 200)")
+    parser.add_argument("--product-size-max", type=int, default=None,
+                       help="general モード時の最大産物サイズ bp (デフォルト: 1000)")
     args = parser.parse_args()
 
     # ディレクトリ設定
@@ -454,7 +577,12 @@ def main():
         OUTPUT_DIR = Path(args.output_dir)
 
     print("=" * 60)
-    print("Primer3 GCA用プライマー設計")
+    if args.mode == "general":
+        pmin = args.product_size_min if args.product_size_min is not None else 200
+        pmax = args.product_size_max if args.product_size_max is not None else 1000
+        print(f"Primer3 汎用特異的プライマー設計 ({pmin}-{pmax} bp)")
+    else:
+        print("Primer3 GCA用プライマー設計 (100-160bp)")
     if args.at_rich:
         print("【AT-rich モード】Lepidoptera等のミトコンドリアDNA用パラメータを使用")
     print("=" * 60)
@@ -485,7 +613,14 @@ def main():
 
     # Primer3で設計
     print("\nPrimer3でプライマー設計中...")
-    results = design_primers_with_primer3(sequence, seq_id=seq_id, at_rich=args.at_rich)
+    results = design_primers_with_primer3(
+        sequence,
+        seq_id=seq_id,
+        at_rich=args.at_rich,
+        mode=args.mode,
+        product_size_min=args.product_size_min,
+        product_size_max=args.product_size_max,
+    )
 
     # 結果パース（at_richフラグを渡してPCR条件計算に反映）
     primers = parse_primer3_results(results, at_rich=args.at_rich)
@@ -510,7 +645,15 @@ def main():
     print(f"\n{len(primers)}個のプライマー候補が見つかりました。")
 
     # 品質評価
-    primers = [evaluate_primer(p) for p in primers]
+    primers = [
+        evaluate_primer(
+            p,
+            mode=args.mode,
+            product_size_min=args.product_size_min,
+            product_size_max=args.product_size_max,
+        )
+        for p in primers
+    ]
 
     # スコアでソート
     primers.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
