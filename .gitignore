@@ -1,0 +1,39 @@
+# Project outputs (each user generates their own)
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# Logs / temp
+*.log
+*.tmp
+.cache/
+
+# Coverage / tests
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/

@@ -1,0 +1,10 @@
+# GCA Primer Auto Design — Python Dependencies
+
+# Core
+biopython>=1.81
+primer3-py>=2.0.0
+javaobj-py3>=0.4.3
+numpy>=1.24.0
+
+# Optional: DNA Dynamo automation on macOS
+# pip install pyobjc-framework-Quartz
